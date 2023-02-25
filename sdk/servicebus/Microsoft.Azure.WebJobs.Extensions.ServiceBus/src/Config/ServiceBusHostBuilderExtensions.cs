@@ -5,6 +5,8 @@ using System;
 using System.Net;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.ServiceBus.Config;
+using Microsoft.Azure.WebJobs.Extensions.ServiceBus.Listeners;
+using Microsoft.Azure.WebJobs.Host.Scale;
 using Microsoft.Azure.WebJobs.ServiceBus;
 using Microsoft.Azure.WebJobs.ServiceBus.Config;
 using Microsoft.Extensions.Azure;
@@ -91,6 +93,13 @@ namespace Microsoft.Extensions.Hosting
             builder.Services.AddAzureClientsCore();
             builder.Services.TryAddSingleton<MessagingProvider>();
             builder.Services.AddSingleton<ServiceBusClientFactory>();
+            return builder;
+        }
+
+        public static IWebJobsBuilder AddServiceBusScale(this IWebJobsBuilder builder)
+        {
+            builder.AddServiceBus();
+            builder.Services.AddSingleton<IScalerProvider, ServiceBusScalerProvider>();
             return builder;
         }
     }
