@@ -13,6 +13,8 @@ using Microsoft.Extensions.Azure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Microsoft.Extensions.Hosting
 {
@@ -96,10 +98,47 @@ namespace Microsoft.Extensions.Hosting
             return builder;
         }
 
-        public static IWebJobsBuilder AddServiceBusScale(this IWebJobsBuilder builder)
+        public static IWebJobsBuilder AddServiceBusScaleForTrigger(this IWebJobsBuilder builder, TriggerMetadata triggerMetadata)
         {
             builder.AddServiceBus();
-            builder.Services.AddSingleton<IScalerProvider, ServiceBusScalerProvider>();
+            builder.Services.AddSingleton<IScaleMonitorProvider>(serviceProvider =>
+            {
+                // TODO: unify getting the services
+                IConfiguration configuration = serviceProvider.GetService<IConfiguration>();
+                AzureComponentFactory azureComponentFactory = triggerMetadata.Properties[nameof(AzureComponentFactory)] as AzureComponentFactory;
+                MessagingProvider messagingProvider  = serviceProvider.GetService<MessagingProvider>();
+                AzureEventSourceLogForwarder logForwarder = serviceProvider.GetService<AzureEventSourceLogForwarder>();
+                IOptions<ServiceBusOptions> options = serviceProvider.GetService<IOptions<ServiceBusOptions>>();
+                ILoggerFactory loggerFactory = serviceProvider.GetService<ILoggerFactory>();
+
+                return new ServiceBusScalerProvider(
+                    configuration,
+                    azureComponentFactory,
+                    triggerMetadata,
+                    messagingProvider,
+                    logForwarder,
+                    options,
+                    loggerFactory);
+            });
+
+            builder.Services.AddSingleton<ITargetScalerProvider>(serviceProvider =>
+            {
+                IConfiguration configuration = serviceProvider.GetService<IConfiguration>();
+                AzureComponentFactory azureComponentFactory = triggerMetadata.Properties[nameof(AzureComponentFactory)] as AzureComponentFactory;
+                MessagingProvider messagingProvider = serviceProvider.GetService<MessagingProvider>();
+                AzureEventSourceLogForwarder logForwarder = serviceProvider.GetService<AzureEventSourceLogForwarder>();
+                IOptions<ServiceBusOptions> options = serviceProvider.GetService<IOptions<ServiceBusOptions>>();
+                ILoggerFactory loggerFactory = serviceProvider.GetService<ILoggerFactory>();
+
+                return new ServiceBusScalerProvider(
+                    configuration,
+                    azureComponentFactory,
+                    triggerMetadata,
+                    messagingProvider,
+                    logForwarder,
+                    options,
+                    loggerFactory);
+            });
             return builder;
         }
     }

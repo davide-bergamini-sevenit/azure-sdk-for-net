@@ -18,21 +18,20 @@ using System.Linq;
 
 namespace Microsoft.Azure.WebJobs.Extensions.ServiceBus.Listeners
 {
-    internal class ServiceBusScalerProvider : IScalerProvider
+    internal class ServiceBusScalerProvider : IScaleMonitorProvider, ITargetScalerProvider
     {
         private readonly IConfiguration _configuration;
         private AzureComponentFactory _defaultAzureComponentFactory;
         private readonly MessagingProvider _messagingProvider;
         private readonly IOptions<ServiceBusOptions> _options;
         private readonly AzureEventSourceLogForwarder _logForwarder;
-        private readonly ITriggerMetadataProvider _triggerMetadataProvider;
+        private readonly TriggerMetadata _triggerMetadata;
         private readonly ILoggerFactory _loggerFactory;
-        private readonly IEnumerable<TriggerMetadata> _triggerMetadata;
 
         public ServiceBusScalerProvider(
             IConfiguration configuration,
             AzureComponentFactory defaultAzureComponentFactory,
-            ITriggerMetadataProvider triggerMetadataProvider,
+            TriggerMetadata triggerMetadata,
             MessagingProvider messagingProvider,
             AzureEventSourceLogForwarder logForwarder,
             IOptions<ServiceBusOptions> options,
@@ -40,39 +39,22 @@ namespace Microsoft.Azure.WebJobs.Extensions.ServiceBus.Listeners
         {
             _configuration = configuration;
             _defaultAzureComponentFactory = defaultAzureComponentFactory;
-            _triggerMetadataProvider = triggerMetadataProvider;
-            _triggerMetadata = triggerMetadataProvider.GetTriggerMetadata();
+            _triggerMetadata = triggerMetadata;
             _messagingProvider = messagingProvider;
             _logForwarder = logForwarder;
             _options = options;
             _loggerFactory = loggerFactory;
         }
 
-        public IEnumerable<IScaleMonitor> GetScaleMonitors()
+        public IScaleMonitor GetMonitor()
         {
-            foreach (var triggerMetada in _triggerMetadata.Where(x => x.Type == "serviceBusTrigger"))
-            {
-                yield return GetMonitor(triggerMetada);
-            }
-        }
-
-        public IEnumerable<ITargetScaler> GetTargetScalers()
-        {
-            foreach (var triggerMetada in _triggerMetadata.Where(x => x.Type == "serviceBusTrigger"))
-            {
-                yield return GetTargetScaler(triggerMetada);
-            }
-        }
-
-        private IScaleMonitor GetMonitor(TriggerMetadata triggerMetadata)
-        {
-            ServiceBusMetadata serviceBusMetadata = JsonConvert.DeserializeObject<ServiceBusMetadata>(triggerMetadata.Metadata.ToString());
-            AzureComponentFactory azureComponentFactory = GetAzureComponentFactory(triggerMetadata);
+            ServiceBusMetadata serviceBusMetadata = JsonConvert.DeserializeObject<ServiceBusMetadata>(_triggerMetadata.Metadata.ToString());
+            AzureComponentFactory azureComponentFactory = GetAzureComponentFactory(_triggerMetadata);
 
             (ServiceBusAdministrationClient adminClient, ServiceBusReceiver receiver) = CreateParameters(_configuration, serviceBusMetadata, azureComponentFactory);
 
             return new ServiceBusScaleMonitor(
-                triggerMetadata.FunctionName,
+                _triggerMetadata.FunctionName,
                 receiver.EntityPath,
                 !string.IsNullOrEmpty(serviceBusMetadata.QueueName) ? ServiceBusEntityType.Queue : ServiceBusEntityType.Topic,
                 new Lazy<ServiceBusReceiver>(() => receiver),
@@ -80,15 +62,15 @@ namespace Microsoft.Azure.WebJobs.Extensions.ServiceBus.Listeners
                 _loggerFactory);
         }
 
-        private ITargetScaler GetTargetScaler(TriggerMetadata triggerMetadata)
+        public ITargetScaler GetTargetScaler()
         {
-            ServiceBusMetadata serviceBusMetadata = JsonConvert.DeserializeObject<ServiceBusMetadata>(triggerMetadata.Metadata.ToString());
-            AzureComponentFactory azureComponentFactory = GetAzureComponentFactory(triggerMetadata);
+            ServiceBusMetadata serviceBusMetadata = JsonConvert.DeserializeObject<ServiceBusMetadata>(_triggerMetadata.Metadata.ToString());
+            AzureComponentFactory azureComponentFactory = GetAzureComponentFactory(_triggerMetadata);
 
             (ServiceBusAdministrationClient adminClient, ServiceBusReceiver receiver) = CreateParameters(_configuration, serviceBusMetadata, azureComponentFactory);
 
             return new ServiceBusTargetScaler(
-                triggerMetadata.FunctionName,
+                _triggerMetadata.FunctionName,
                 receiver.EntityPath,
                 receiver.EntityPath.Contains("//") ? ServiceBusEntityType.Topic : ServiceBusEntityType.Queue,
                 new Lazy<ServiceBusReceiver>(() => receiver),

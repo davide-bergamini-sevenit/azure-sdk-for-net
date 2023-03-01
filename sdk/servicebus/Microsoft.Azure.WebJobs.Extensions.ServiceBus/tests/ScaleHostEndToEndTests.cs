@@ -102,13 +102,25 @@ namespace Microsoft.Azure.WebJobs.Extensions.ServiceBus.Tests
                 services.AddAzureClientsCore();
                 services.AddAzureStorageScaleServices();
 
-                services.AddSingleton<ITriggerMetadataProvider>(triggerMetadataProvider);
                 services.AddSingleton<IScaleMetricsRepository, TestScaleMetricsRepository>();
             })
             .ConfigureWebJobsScale((context, builder) =>
             {
                 builder.UseHostId(hostId);
-                builder.AddServiceBusScale();
+
+                foreach (var jtocken in JObject.Parse(triggers)["triggers"])
+                {
+                    TriggerMetadata metadata = new TriggerMetadata(jtocken as JObject);
+                    if (metadata.FunctionName == Function1Name)
+                    {
+                        metadata.Properties[nameof(AzureComponentFactory)] = defaultAzureComponentFactory;
+                    }
+                    else
+                    {
+                        metadata.Properties[nameof(AzureComponentFactory)] = factoryWrapper;
+                    }
+                    builder.AddServiceBusScaleForTrigger(metadata);
+                }
             },
             scaleOptions =>
             {
